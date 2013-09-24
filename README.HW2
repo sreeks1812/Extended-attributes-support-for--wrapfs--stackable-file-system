@@ -1,0 +1,92 @@
+/*README*/
+
+NAME : SREEKAR REDDY
+SB ID # : 108625486
+
+In this homework, we build a file system using stacking technologies. The wrapfs is modified to add integrity support for files and directories.
+
+The below source files are modified to add integrity support for files and directories.
+
+Source files:
+
+1)wrapfs/wrapfs.h- Added function declarations required to support extended attribute operations such as list,set,get and remove.
+
+2)wrapfs/file.c-Modified code in ->wrapfs_open and ->wrapfs_file_release such that in ->wrapfs_open the file's integrity is validated when it is opened and in ->wrapfs_file_release, the file's integrity is computed and is updated in its EA.
+
+3)wrapfs/inode.c- Created function pointers for the added extended attributes in the inode_operations structure.
+
+4)wrapfs/Makefile- I have edited the Makefile for it to compile the source file "xattr.c" also, which is added to the wrapfs folder and to make and build the modules.
+
+Added files:
+
+1)wrapfs/xattr.c- This file provides the definations for the various functions associated with the extended attributes. The function definations included are ->*wrapfs_xattr_alloc, ->wrapfs_getxattr,
+->wrapfs_setxattr, ->wrapfs_removexattr and ->wrapfs_listxattr.
+
+Steps to be followed for compiling and running:
+
+In fs/wrapfs folder, 
+
+#make - To compile.
+
+Insert module:
+
+#insmod wrapfs.ko
+
+Mount:
+
+#mount -t ext3 -o user_xattr /dev/sdb1 /tmp.
+
+This mounts the file system found on device /dev/sdb1 which is of type ext3 at the directory /tmp.
+
+mount -t wrapfs -o user_xattr /tmp/ /n/scratch/
+
+This mounts the file system found on device /tmp which is of type wrapfs at the directory /n/scratch/.
+
+To check the extended attributes:
+
+cd /n/scratch/
+
+To set an extended attribute named "user.has_integrity" to a value "1" to a file named "sample.txt"
+
+#setfattr -n user.has_integrity -v 1 sample.txt
+
+To get the value of the extended attribute "user.has_integrity" of the file "sample.txt"
+
+#getfattr -n user.has_integrity sample.txt
+
+To remove the extended attribute named "user.has_integrity" of the file "sample.txt"
+
+#setfattr -x user.has_integrity sample.txt
+
+Unmounting:
+
+#umount /n/scratch
+#umount /tmp
+
+Removing the "wrapfs" module
+
+#rmmod wrapfs
+
+Design considerations:
+
+The extended attributes to be added are given the names "user.has_integrity" and "user.integrity_val".
+
+In order to implement the first task, I have created a new source named "xattr.c" which contains the functions definations for ->*wrapfs_xattr_alloc, ->wrapfs_getxattr, ->wrapfs_setxattr, ->wrapfs_removexattr and ->wrapfs_listxattr. This has been written by copying parts of code from the "xattr.c" file of the unionfs. In order to maintain the semantics of the two extended attrbutes, i.e "user.has_integrity" and "user.integrity_val", code of the ->wrapfs_setxattr, ->wrapfs_removexattr  has to be modified. If the attribute to be set is "user.has_integrity", initially the user id is calculated to check if it is the root user. This is done as we allow only the root user to set,change or remove this attribute. Checks are done to ensure that the value to which this attribute is set is 0 or 1. If "user.has_integrity" is being set to zero, then we remove the "user.integrity_val" EA if it exists. If "user.has_integrity" is being set to 1, then the integrity of the file is computed and the "user.integrity_val" is set to this value. Checks are performed so that users canot modify the "user.integrity_val" EA.
+
+In the ->wrapfs_removexattr function only the "user.has_integrity" is allowed to be removed. But as this atribute is asked to be removed, the "user.integrity_val" is also removed.
+
+In the "file.c" source file, the ->wrapfs_open and ->wrapfs_file_release are modified. The ->wrapfs_open is invoked when the file is opened. In this function, initially macros such as S_ISDIR,S_ISREG and S_ISLINK are used to find out if the file is a directory, a regular file or a symlink. If the file is a regular file, then the value of the "user.has_integrity" EA is found out. In this, the file's integrity is verfied by computing its integrity again and comparing this with the value retrieved from the getfattr. Operation is not permitted if the two values don't match. A dirty bit is set when ever a file is written and the integrity values are compared only when the dirty bit is set. The ->wrapfs_file_release function is invoked when the file is being closed and the integrity value is computed when the dirty bit is set ,i.e when the file is written to. This computed value is set as the value of "user.integrity_val".
+
+TASK 2:
+
+As part of task 2, the "inode.c" source file is modified. The ->wrapfs_create and ->wrapfs_mkdir are modified. In the ->wrapfs_create function, the value of the "user.has_integrity" EA of the parent directory is retrieved and this value is set to the "user.has_integrity" values of all the files that are created in this directory. If this value is 1, then the checksum is calculated as set as the "user.integrity_val" EA to all the files being created in the directory . In the 
+->wrapfs_mkdir function the value of the "user.has_integrity" EA of the parent directory is retrieved and this value is set to the "user.has_integrity" values of any directories under that parent directory.
+
+
+REFERENCES:
+
+1) I have copied code from the "xattr.c" of the unionfs.
+
+2) An in-depth look at file handling in the Linux kernel
+http://kevinboone.net/linuxfile.html
+
